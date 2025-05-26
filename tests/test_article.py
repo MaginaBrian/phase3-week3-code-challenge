@@ -2,20 +2,19 @@ import pytest
 from lib.models.article import Article
 from lib.models.author import Author
 from lib.models.magazine import Magazine
+from lib.db.seed import seed_database
 
-def test_article_has_title_and_content():
-    article = Article(1, "Sample Title", "Sample Content", 1, 1)
-    assert article.title == "Sample Title"
-    assert article.content == "Sample Content"
+@pytest.fixture
+def setup_db():
+    seed_database()
+    yield
 
-def test_article_all_returns_list():
-    articles = Article.all()
-    assert isinstance(articles, list)
-    assert all(isinstance(a, Article) for a in articles)
-
-def test_article_relations():
-    articles = Article.all()
-    if articles:
-        article = articles[0]
-        assert article.author() is not None
-        assert article.magazine() is not None
+def test_article_creation(setup_db):
+    author = Author.find_by_id(1)
+    magazine = Magazine.find_by_id(1)
+    article = Article("Test Article", author, magazine)
+    article.save()
+    assert article.id is not None
+    assert article.title == "Test Article"
+    assert article.author.id == author.id
+    assert article.magazine.id == magazine.id
