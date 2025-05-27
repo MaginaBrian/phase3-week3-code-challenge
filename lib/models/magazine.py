@@ -1,12 +1,15 @@
-from ..db.connection import get_connection
+
+from lib.db.connection import get_connection
 
 class Magazine:
     def __init__(self, name, category, id=None):
         self._id = id
         self._name = None
         self._category = None
-        self.name = name
-        self.category = category
+        self.name = name  
+        self.category = category  
+        if id is None:
+            self.save()
 
     @property
     def id(self):
@@ -36,21 +39,18 @@ class Magazine:
         conn = get_connection()
         cursor = conn.cursor()
         try:
+            conn.execute("BEGIN TRANSACTION")
             if self._id is None:
-                cursor.execute(
-                    "INSERT INTO magazines (name, category) VALUES (?, ?) RETURNING id",
-                    (self.name, self.category)
-                )
-                self._id = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO magazines (name, category) VALUES (?, ?)", 
+                              (self._name, self._category))
+                self._id = cursor.lastrowid
             else:
-                cursor.execute(
-                    "UPDATE magazines SET name = ?, category = ? WHERE id = ?",
-                    (self.name, self.category, self._id)
-                )
-            conn.commit()
+                cursor.execute("UPDATE magazines SET name = ?, category = ? WHERE id = ?", 
+                              (self._name, self._category, self._id))
+            conn.execute("COMMIT")
         except Exception as e:
-            conn.rollback()
-            raise e
+            conn.execute("ROLLBACK")
+            raise Exception(f"Error saving magazine: {e}")
         finally:
             conn.close()
 
@@ -98,7 +98,7 @@ class Magazine:
             SELECT a.* FROM authors a
             JOIN articles art ON a.id = art.author_id
             WHERE art.magazine_id = ?
-            GROUP BY a.id, a.name
+            GROUP BY a.id
             HAVING COUNT(art.id) > 2
         """, (self._id,))
         authors = cursor.fetchall()
@@ -110,11 +110,10 @@ class Magazine:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT m.*, COUNT(a.id) as article_count
-            FROM magazines m
-            LEFT JOIN articles a ON m.id = a.magazine_id
-            GROUP BY m.id, m.name, m.category
-            ORDER BY article_count DESC
+            SELECT m.* FROM magazines m
+            JOIN articles a ON m.id = a.magazine_id
+            GROUP BY m.id
+            ORDER BY COUNT(a.id) DESC
             LIMIT 1
         """)
         row = cursor.fetchone()

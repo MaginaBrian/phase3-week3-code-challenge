@@ -1,6 +1,6 @@
+
 __pycache__/
 *.pyc
-.env
-articles.db
 env/
-venv/
+articles.db
+*.sqlite3

@@ -1,10 +1,13 @@
-from ..db.connection import get_connection
+
+from lib.db.connection import get_connection
 
 class Author:
     def __init__(self, name, id=None):
         self._id = id
         self._name = None
-        self.name = name  # Use setter for validation
+        self.name = name  
+        if id is None:
+            self.save()
 
     @property
     def id(self):
@@ -24,21 +27,16 @@ class Author:
         conn = get_connection()
         cursor = conn.cursor()
         try:
+            conn.execute("BEGIN TRANSACTION")
             if self._id is None:
-                cursor.execute(
-                    "INSERT INTO authors (name) VALUES (?) RETURNING id",
-                    (self.name,)
-                )
-                self._id = cursor.fetchone()[0]
+                cursor.execute("INSERT INTO authors (name) VALUES (?)", (self._name,))
+                self._id = cursor.lastrowid
             else:
-                cursor.execute(
-                    "UPDATE authors SET name = ? WHERE id = ?",
-                    (self.name, self._id)
-                )
-            conn.commit()
+                cursor.execute("UPDATE authors SET name = ? WHERE id = ?", (self._name, self._id))
+            conn.execute("COMMIT")
         except Exception as e:
-            conn.rollback()
-            raise e
+            conn.execute("ROLLBACK")
+            raise Exception(f"Error saving author: {e}")
         finally:
             conn.close()
 
@@ -81,10 +79,20 @@ class Author:
         return [dict(row) for row in magazines]
 
     def add_article(self, magazine, title):
-        from .article import Article
-        article = Article(title, self, magazine)
-        article.save()
-        return article
+        conn = get_connection()
+        cursor = conn.cursor()
+        try:
+            conn.execute("BEGIN TRANSACTION")
+            cursor.execute(
+                "INSERT INTO articles (title, author_id, magazine_id) VALUES (?, ?, ?)",
+                (title, self._id, magazine.id)
+            )
+            conn.execute("COMMIT")
+        except Exception as e:
+            conn.execute("ROLLBACK")
+            raise Exception(f"Error adding article: {e}")
+        finally:
+            conn.close()
 
     def topic_areas(self):
         conn = get_connection()
